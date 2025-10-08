@@ -10,10 +10,11 @@
   in {
     devShells = eachSystem (pkgs: {
       default = pkgs.mkShell {
-        buildInputs = [
-          pkgs.python3
-          pkgs.uv
-          pkgs.basedpyright
+        buildInputs = with pkgs; [
+          python3
+          uv
+          black
+          basedpyright
         ];
       };
     });
