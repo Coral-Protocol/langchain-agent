@@ -269,7 +269,7 @@ async def main():
 
     async with client.session("coral") as coral_session:
         coral_instruction = (
-            await load_mcp_resources(coral_session, uris="coral://Instruction.resource")
+            await load_mcp_resources(coral_session, uris="coral://agent/instruction")
         )[0]
 
         for _ in range(10):
@@ -277,7 +277,7 @@ async def main():
                 logger.info("No more budget - breaking loop")
                 break
             coral_messages = (
-                await load_mcp_resources(coral_session, uris="coral://Message.resource")
+                await load_mcp_resources(coral_session, uris="coral://messages")
             )[0]
 
             history = get_history()
