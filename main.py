@@ -1,5 +1,6 @@
 from typing import Sequence, override, Literal
 from langchain_core.messages.tool import tool_call
+from langchain_core.tools import tool
 from langchain_mcp_adapters.resources import load_mcp_resources
 from langchain_openai import ChatOpenAI
 from langchain.agents import AgentExecutor, create_tool_calling_agent
@@ -94,39 +95,92 @@ class ToolRunner:
         return message
 
 
-def claim(amount: int, claim_type: Literal["coral", "usd"] = "coral"):
-    CORAL_RUNTIME = getenv("CORAL_ORCHESTRATION_RUNTIME", None)
-    if CORAL_RUNTIME is None:
-        logger.warning("Not orchestrated - skipping Coral Server claim")
-        return True
+class ClaimError(Exception):
+    def __init__(self, message, response):
+        super().__init__(message)
+        self.response = response
 
-    coral_api_url = asserted_env(
-        "CORAL_API_URL",
-        "This is set by Coral Server in orchestration, and CORAL_ORCHESTRATION_RUNTIME is set - are you running an older version of Coral Server?",
-    )
-    coral_session_id = asserted_env(
-        "CORAL_SESSION_ID",
-        "This is set by Coral Server in orchestration, and CORAL_ORCHESTRATION_RUNTIME is set - are you running an older version of Coral Server?",
-    )
-    try:
-        response = requests.post(
-            f"{coral_api_url}/api/v1/internal/claim/{coral_session_id}",
-            headers={"Content-Type": "application/json"},
-            json={"amount": {"type": claim_type, "amount": amount}},
-        )
 
-        if response.status_code == 200:
-            logger.info(f"Claimed {amount} {claim_type}")
+class ClaimHandler:
+    _remaining: float | None = None
+    _currency: Literal["coral", "micro_coral", "usd"]
+
+    def __init__(
+        self, currency: Literal["coral", "micro_coral", "usd"] = "micro_coral"
+    ) -> None:
+        if currency not in ["coral", "micro_coral", "usd"]:
+            raise ValueError("invalid currency %s" % self._currency)
+        self._currency = currency
+
+    def no_budget(self) -> bool:
+        """Returns true if we *know* we have no budget remaining, false if we either have >0 remaining - or we don't know our budget yet (no claim calls yet)"""
+        return (self._remaining is not None) and self._remaining <= 0
+
+    def remaining(self) -> float | None:
+        """
+        Get the last known remaining budget amount, if known.
+
+        Returns None if we have never called claim() yet - this does NOT necessarily mean we have no budget
+
+        """
+        return self._remaining
+
+    def currency(self) -> Literal["coral", "micro_coral", "usd"]:
+        """Returns the currency this claim handler uses ('coral', 'micro_coral' or 'usd')"""
+        return self._currency
+
+    def claim(self, amount: float) -> float:
+        """
+        Send a claim request to the Coral Server, returning the remaining budget.
+        All units are in the currency this class was constructed with
+        """
+        CORAL_SEND_CLAIMS = getenv(
+            "CORAL_SEND_CLAIMS", "0"
+        )  # is set to 1 by coral server when running remotely
+        if CORAL_SEND_CLAIMS is "0":
+            logger.warning("Not orchestrated - skipping Coral Server claim")
             return True
-        else:
-            logger.error(
-                f"Failed to claim {amount} {claim_type} - got {response.status_code} status"
-            )
-            return False
 
-    except:
-        logger.exception(f"Error claiming {amount} {claim_type}")
-        return False
+        coral_api_url = asserted_env(
+            "CORAL_API_URL",
+            "This should be set by Coral Server in orchestration, and CORAL_SEND_CLAIMS is 1 - make sure you are not setting these manually!",
+        )
+        coral_session_id = asserted_env(
+            "CORAL_SESSION_ID",
+            "This should be set by Coral Server in orchestration, and CORAL_SEND_CLAIMS is 1 - make sure you are not setting these manually!",
+        )
+        try:
+            response = requests.post(
+                f"{coral_api_url}/api/v1/internal/claim/{coral_session_id}",
+                headers={"Content-Type": "application/json"},
+                json={"amount": {"type": self._currency, "amount": amount}},
+            )
+
+            if response.status_code == 200:
+                budget = response.json()
+                remaining = float(budget["remainingBudget"])  # in micro-coral
+                match self._currency:
+                    case "coral":
+                        remaining = remaining * 1_000_000
+                    case "micro_coral":
+                        pass
+                    case "usd":
+                        remaining = (
+                            remaining * 1_000_000 * float(budget["coralUsdPrice"])
+                        )
+                logger.info(
+                    f"Claimed {amount} {self._currency} - remaining budget: {remaining} {self._currency}"
+                )
+                return remaining
+            else:
+                raise ClaimError(
+                    f"Failed to claim {amount} {self._currency} - got {response.status_code} status",
+                    response,
+                )
+
+        except Exception as e:
+            self._remaining = 0
+            raise e
 
 
 def make_history():
@@ -138,9 +192,24 @@ def make_history():
     return get_history
 
 
+@tool()
+def test_tool():
+    global claim_handler
+    if claim_handler.no_budget():
+        raise RuntimeError("Out of budget")
+
+    logger.info("WE ARE DOING A TOOL")
+    _ = claim_handler.claim(100)
+
+    return "Success!"
+
+
 async def main():
     # What orchestration runtime we are running in (docker, executable, etc.). None if we aren't orchestrated (i.e. devmode)
     CORAL_RUNTIME = getenv("CORAL_ORCHESTRATION_RUNTIME", None)
+    # Load .env file if we are in dev mode for convenience
+    if CORAL_RUNTIME is None:
+        _ = load_dotenv()
 
     CORAL_CONNECTION_URL = asserted_env("CORAL_CONNECTION_URL")
 
@@ -149,17 +218,14 @@ async def main():
     MODEL_API_KEY = asserted_env("MODEL_API_KEY")
     MODEL_BASE_URL = getenv("MODEL_BASE_URL")
 
-    # Load .env file if we are in dev mode for convenience
-    if CORAL_RUNTIME is None:
-        _ = load_dotenv()
+    global claim_handler
+    claim_handler = ClaimHandler("micro_coral")
 
     prompt = ChatPromptTemplate.from_messages(
         [
-            MessagesPlaceholder("coral_instruction"),
             SystemMessage(
-                content="You are an agent. Please create a thread, and send a message into it."
+                content="{coral_instruction} You are an agent. Please create a thread, and send a message into it. {coral_messages}"
             ),
-            MessagesPlaceholder("coral_messages", optional=True),
             MessagesPlaceholder("history"),
         ]
     )
@@ -190,12 +256,13 @@ async def main():
         logger.exception("Failed to get MCP tools")
         sys.exit(1)
 
-    chain = prompt | model.bind_tools(tools)
+    chain = prompt | model.bind_tools(tools + [test_tool])
     chain_with_history = RunnableWithMessageHistory(
         chain,
         get_history,
-        # input_messages_key="history",
+        input_messages_key=None,
         history_messages_key="history",
+        output_messages_key="output",
     )
 
     tool_runner = ToolRunner(tools)
@@ -206,13 +273,14 @@ async def main():
         )[0]
 
         for _ in range(10):
+            if claim_handler.no_budget():
+                logger.info("No more budget - breaking loop")
+                break
             coral_messages = (
                 await load_mcp_resources(coral_session, uris="coral://Message.resource")
             )[0]
-            logger.info("coral_messages: %s", coral_messages)
 
-            # history = get_history()
-            # logger.debug("pre call history => \n%s", history.messages)
+            history = get_history()
 
             step_result: BaseMessage = await chain_with_history.ainvoke(
                 {  # We pass in our loaded resources here (as_string is safe here because we know these resources always return text)
@@ -224,9 +292,6 @@ async def main():
                     ],
                 }
             )
-
-            history = get_history()
-            logger.debug("post call history => \n%s", history.messages)
 
             if type(step_result) is AIMessage:
                 tool_calls = step_result.tool_calls
