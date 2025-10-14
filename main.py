@@ -222,10 +222,12 @@ async def main():
     global claim_handler
     claim_handler = ClaimHandler("micro_coral")
 
+    extra_prompt = getenv("CORAL_PROMPT_SYSTEM", "")
+
     prompt = ChatPromptTemplate.from_messages(
         [
             SystemMessage(
-                content="{coral_instruction} You are an agent. Please create a thread, and send a message into it. Call the test tool often! {coral_messages}"
+                content=f"{{coral_instruction}} You are an agent. Please create a thread, and send a message into it. {extra_prompt} {{coral_messages}}"
             ),
             MessagesPlaceholder("history"),
         ]
