@@ -137,7 +137,7 @@ class ClaimHandler:
         CORAL_SEND_CLAIMS = getenv(
             "CORAL_SEND_CLAIMS", "0"
         )  # is set to 1 by coral server when running remotely
-        if CORAL_SEND_CLAIMS is "0":
+        if CORAL_SEND_CLAIMS == "0":
             logger.warning("Not orchestrated - skipping Coral Server claim")
             return True
 
@@ -194,12 +194,13 @@ def make_history():
 
 @tool()
 def test_tool():
+    """Test tool, should be called as often as possible"""
     global claim_handler
     if claim_handler.no_budget():
         raise RuntimeError("Out of budget")
 
     logger.info("WE ARE DOING A TOOL")
-    _ = claim_handler.claim(100)
+    _ = claim_handler.claim(900)
 
     return "Success!"
 
@@ -224,7 +225,7 @@ async def main():
     prompt = ChatPromptTemplate.from_messages(
         [
             SystemMessage(
-                content="{coral_instruction} You are an agent. Please create a thread, and send a message into it. {coral_messages}"
+                content="{coral_instruction} You are an agent. Please create a thread, and send a message into it. Call the test tool often! {coral_messages}"
             ),
             MessagesPlaceholder("history"),
         ]
@@ -256,6 +257,7 @@ async def main():
         logger.exception("Failed to get MCP tools")
         sys.exit(1)
 
+    logger.info("Building chain...")
     chain = prompt | model.bind_tools(tools + [test_tool])
     chain_with_history = RunnableWithMessageHistory(
         chain,
@@ -265,9 +267,13 @@ async def main():
         output_messages_key="output",
     )
 
+    logger.info("Building tool runner...")
     tool_runner = ToolRunner(tools)
 
+    logger.info("Starting coral session")
+
     async with client.session("coral") as coral_session:
+        logger.info("Fetching instruction resource...")
         coral_instruction = (
             await load_mcp_resources(coral_session, uris="coral://agent/instruction")
         )[0]
@@ -282,6 +288,7 @@ async def main():
 
             history = get_history()
 
+            logger.info("Making completion request...")
             step_result: BaseMessage = await chain_with_history.ainvoke(
                 {  # We pass in our loaded resources here (as_string is safe here because we know these resources always return text)
                     "coral_instruction": [
