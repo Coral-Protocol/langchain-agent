@@ -2,6 +2,7 @@ from typing import Sequence, override, Literal
 from langchain_core.messages.tool import tool_call
 from langchain_core.tools import tool
 from langchain_mcp_adapters.resources import load_mcp_resources
+from langchain_mcp_adapters.tools import load_mcp_tools
 from langchain_openai import ChatOpenAI
 from langchain.agents import AgentExecutor, create_tool_calling_agent
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -241,23 +242,33 @@ async def main():
             }
         }
     )
-    logger.info(f"Connecting to Coral @ '{CORAL_CONNECTION_URL}'")
-    try:
-        tools = await client.get_tools()
-    except:
-        logger.exception("Failed to get MCP tools")
-        sys.exit(1)
 
-    logger.info("Building chain...")
-    chain = prompt | model.bind_tools(tools + [test_tool])
     history = InMemoryHistory()
 
-    logger.info("Building tool runner...")
-    tool_runner = ToolRunner(tools)
-
-    logger.info("Starting coral session")
-
+    logger.info(f"Connecting to Coral @ '{CORAL_CONNECTION_URL}'")
     async with client.session("coral") as coral_session:
+        try:
+            coral_tools = await load_mcp_tools(
+                coral_session,
+                connection=client.connections["coral"],
+            )
+            other_connections = list(
+                filter(lambda k: k != "coral", client.connections.keys())
+            )
+            other_tools = []
+            for server in other_connections:
+                other_tools.extend(await client.get_tools(server_name=server))
+            logger.info(f"Found {len(other_tools)} non-coral tools.")
+            tools = coral_tools
+        except:
+            logger.exception("Failed to get MCP tools")
+            sys.exit(1)
+        logger.info("Building chain...")
+        chain = prompt | model.bind_tools(tools + [test_tool])
+
+        logger.info("Building tool runner...")
+        tool_runner = ToolRunner(tools)
+
         logger.info("Fetching instruction resource...")
         coral_instruction = (
             await load_mcp_resources(coral_session, uris="coral://agent/instruction")
