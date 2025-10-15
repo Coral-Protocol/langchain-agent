@@ -206,6 +206,7 @@ async def main():
 
     CORAL_CONNECTION_URL = asserted_env("CORAL_CONNECTION_URL")
 
+    SYSTEM_PROMPT = asserted_env("SYSTEM_PROMPT")
     MODEL_NAME = asserted_env("MODEL_NAME")
     MODEL_PROVIDER = asserted_env("MODEL_PROVIDER")
     MODEL_API_KEY = asserted_env("MODEL_API_KEY")
@@ -219,7 +220,7 @@ async def main():
     prompt = ChatPromptTemplate.from_messages(
         [
             SystemMessage(
-                content=f"{{coral_instruction}} You are an agent. Please create a thread, and send a message into it. {extra_prompt} {{coral_messages}}"
+                content=f"{{coral_instruction}} {SYSTEM_PROMPT} {extra_prompt} {{coral_messages}}"
             ),
             MessagesPlaceholder("history"),
         ]
