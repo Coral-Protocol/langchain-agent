@@ -183,15 +183,6 @@ class ClaimHandler:
             raise e
 
 
-def make_history():
-    store = InMemoryHistory()
-
-    def get_history() -> BaseChatMessageHistory:
-        return store
-
-    return get_history
-
-
 @tool()
 def test_tool():
     """Test tool, should be called as often as possible"""
@@ -233,8 +224,6 @@ async def main():
         ]
     )
 
-    get_history = make_history()
-
     model = init_chat_model(
         model=MODEL_NAME,
         model_provider=MODEL_PROVIDER,
@@ -261,13 +250,7 @@ async def main():
 
     logger.info("Building chain...")
     chain = prompt | model.bind_tools(tools + [test_tool])
-    chain_with_history = RunnableWithMessageHistory(
-        chain,
-        get_history,
-        input_messages_key=None,
-        history_messages_key="history",
-        output_messages_key="output",
-    )
+    history = InMemoryHistory()
 
     logger.info("Building tool runner...")
     tool_runner = ToolRunner(tools)
@@ -288,10 +271,10 @@ async def main():
                 await load_mcp_resources(coral_session, uris="coral://messages")
             )[0]
 
-            history = get_history()
+            logger.debug("history = %s", history)
 
             logger.info("Making completion request...")
-            step_result: BaseMessage = await chain_with_history.ainvoke(
+            step_result: BaseMessage = await chain.ainvoke(
                 {  # We pass in our loaded resources here (as_string is safe here because we know these resources always return text)
                     "coral_instruction": [
                         SystemMessage(content=coral_instruction.as_string())
@@ -299,15 +282,17 @@ async def main():
                     "coral_messages": [
                         SystemMessage(content=coral_messages.as_string())
                     ],
+                    "history": history.messages,
                 }
             )
+
+            history.add_message(step_result)
 
             if type(step_result) is AIMessage:
                 tool_calls = step_result.tool_calls
                 for call in tool_calls:
                     history.add_message(await tool_runner.run_tool(call))
 
-            # history.append(step_result["output"])
             logger.debug("step_result: %s", step_result)
 
 
