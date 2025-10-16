@@ -173,19 +173,6 @@ class ClaimHandler:
             raise e
 
 
-@tool()
-def test_tool():
-    """Test tool, should be called as often as possible"""
-    global claim_handler
-    if claim_handler.no_budget():
-        raise RuntimeError("Out of budget")
-
-    logger.info("WE ARE DOING A TOOL")
-    _ = claim_handler.claim(900)
-
-    return "Success!"
-
-
 async def main():
     # What orchestration runtime we are running in (docker, executable, etc.). None if we aren't orchestrated (i.e. devmode)
     CORAL_RUNTIME = getenv("CORAL_ORCHESTRATION_RUNTIME", None)
@@ -254,7 +241,7 @@ async def main():
             logger.exception("Failed to get MCP tools")
             sys.exit(1)
         logger.info("Building chain...")
-        chain = prompt | model.bind_tools(tools + [test_tool])
+        chain = prompt | model.bind_tools(tools)
 
         logger.info("Building tool runner...")
         tool_runner = ToolRunner(tools)
