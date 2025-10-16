@@ -249,7 +249,7 @@ async def main():
             for server in other_connections:
                 other_tools.extend(await client.get_tools(server_name=server))
             logger.info(f"Found {len(other_tools)} non-coral tools.")
-            tools = coral_tools
+            tools = coral_tools + other_tools
         except:
             logger.exception("Failed to get MCP tools")
             sys.exit(1)
