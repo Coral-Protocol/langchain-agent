@@ -1,20 +1,16 @@
 from os import getenv
-from typing import Sequence, override, Literal
-from langchain_core.tools import tool
-from langchain_mcp_adapters.resources import load_mcp_resources
-from langchain_mcp_adapters.tools import load_mcp_tools
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain.chat_models import init_chat_model
-from langchain_mcp_adapters.client import BaseTool, MultiServerMCPClient
-from langchain_core.chat_history import BaseChatMessageHistory
-from langchain_core.messages import (
-    BaseMessage,
-    AIMessage,
-    SystemMessage,
-    ToolCall,
-    ToolMessage,
-)
-from pydantic import BaseModel, Field
+from typing import Literal
+
+import requests
+
+import logging
+from rich.logging import RichHandler
+
+from utils import asserted_env
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+logger.addHandler(RichHandler(rich_tracebacks=True))
 
 
 class ClaimError(Exception):
