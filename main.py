@@ -176,27 +176,34 @@ class ClaimHandler:
 async def main():
     # What orchestration runtime we are running in (docker, executable, etc.). None if we aren't orchestrated (i.e. devmode)
     CORAL_RUNTIME = getenv("CORAL_ORCHESTRATION_RUNTIME", None)
+
     # Load .env file if we are in dev mode for convenience
     if CORAL_RUNTIME is None:
         _ = load_dotenv()
 
+    # URL to the Coral MCP Server we need to connect to. This is provided by Coral Server when orchestrating us.
     CORAL_CONNECTION_URL = asserted_env("CORAL_CONNECTION_URL")
 
+    # Load the Coral Server provided system prompt injection parameter passed in via orchestration
+    EXTRA_PROMPT = getenv("CORAL_PROMPT_SYSTEM", "")
+
+    # Load the rest of our options as defined in coral-agent.toml.
+    # (we can assert these variables exist since Coral Server provides the default value for any non-required options)
     SYSTEM_PROMPT = asserted_env("SYSTEM_PROMPT")
     MODEL_NAME = asserted_env("MODEL_NAME")
     MODEL_PROVIDER = asserted_env("MODEL_PROVIDER")
     MODEL_API_KEY = asserted_env("MODEL_API_KEY")
     MODEL_BASE_URL = getenv("MODEL_BASE_URL")
 
-    global claim_handler
-    claim_handler = ClaimHandler("micro_coral")
+    MAX_ITERATIONS = int(asserted_env("MAX_ITERATIONS"))
 
-    extra_prompt = getenv("CORAL_PROMPT_SYSTEM", "")
+    global claim_handler  # this is global so tools can use it easily
+    claim_handler = ClaimHandler("micro_coral")
 
     prompt = ChatPromptTemplate.from_messages(
         [
             SystemMessage(
-                content=f"{{coral_instruction}} {SYSTEM_PROMPT} {extra_prompt} {{coral_messages}}"
+                content=f"{{coral_instruction}} {SYSTEM_PROMPT} {EXTRA_PROMPT} {{coral_messages}}"
             ),
             MessagesPlaceholder("history"),
         ]
@@ -251,7 +258,7 @@ async def main():
             await load_mcp_resources(coral_session, uris="coral://agent/instruction")
         )[0]
 
-        for _ in range(10):
+        for _ in range(MAX_ITERATIONS):
             if claim_handler.no_budget():
                 logger.info("No more budget - breaking loop")
                 break

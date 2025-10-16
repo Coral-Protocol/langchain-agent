@@ -4,10 +4,14 @@ version = "0.1.0"
 
 [options]
 SYSTEM_PROMPT = { type = "string", required = true, description = "The system prompt to use" }
+
+MODEL_API_KEY = { type = "string", required = true, description = "The API key for the LLM provider (OpenAI, Anthropic, Open Router, etc)" }
+
 MODEL_NAME = { type = "string", default = "gpt-4.1-mini", description = "Name of the model to use. See https://python.langchain.com/api_reference/langchain/chat_models/langchain.chat_models.base.init_chat_model.html for a list of available model names." }
 MODEL_PROVIDER = { type = "string", default = "openai", description = "The model provider to use. See https://python.langchain.com/api_reference/langchain/chat_models/langchain.chat_models.base.init_chat_model.html for a list of available providers." }
 MODEL_BASE_URL = { type = "string", required = false, description = "The base url of the model provider. See https://python.langchain.com/api_reference/langchain/chat_models/langchain.chat_models.base.init_chat_model.html for more info." }
-MODEL_API_KEY = { type = "string", required = true, description = "The API key for the LLM provider (OpenAI, Anthropic, Open Router, etc)" }
+
+MAX_ITERATIONS = { type = "number", default = 10, description = "The maximum number of LLM iterations (ignoring tool calls) to run." }
 
 [runtimes.executable]
 command = ["uv", "run", "main.py"]
