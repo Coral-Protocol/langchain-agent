@@ -89,6 +89,9 @@ async def main():
     MODEL_API_KEY = asserted_env("MODEL_API_KEY")
     MODEL_BASE_URL = getenv("MODEL_BASE_URL")
 
+    TEMPERATURE = float(asserted_env("MODEL_TEMPERATURE"))
+    MAX_TOKENS = int(asserted_env("MODEL_MAX_TOKENS"))
+
     MAX_ITERATIONS = int(asserted_env("MAX_ITERATIONS"))
 
     global claim_handler  # This is global so tools can use it easily
@@ -108,6 +111,8 @@ async def main():
         model_provider=MODEL_PROVIDER,
         base_url=MODEL_BASE_URL,
         api_key=MODEL_API_KEY,
+        temperature=TEMPERATURE,
+        max_tokens=MAX_TOKENS,
     )
 
     client = MultiServerMCPClient(
