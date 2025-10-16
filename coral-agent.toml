@@ -14,4 +14,4 @@ MODEL_BASE_URL = { type = "string", required = false, description = "The base ur
 MAX_ITERATIONS = { type = "number", default = 10, description = "The maximum number of LLM iterations (ignoring tool calls) to run." }
 
 [runtimes.executable]
-command = ["uv", "run", "main.py"]
+command = ["uv", "run", "src/main.py"]
