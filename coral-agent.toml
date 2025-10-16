@@ -1,5 +1,5 @@
 [agent]
-name = "model-langchain"
+name = "langchain-agent"
 version = "0.1.0"
 
 [options]

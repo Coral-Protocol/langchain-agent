@@ -1,7 +1,7 @@
 [project]
-name = "model-langchain"
+name = "langchain-agent"
 version = "0.1.0"
-description = "Add your description here"
+description = "Example Coral agent written in Langchain"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
