@@ -160,6 +160,7 @@ class ClaimHandler:
                 logger.info(
                     f"Claimed {amount} {self._currency} - remaining budget: {remaining} {self._currency}"
                 )
+                self._remaining = remaining
                 return remaining
             else:
                 raise ClaimError(
