@@ -1,4 +1,9 @@
 .direnv
-.idea
 .venv
 .env
+
+.idea
+
+__pycache__/
+*.py[codz]
+*$py.class
