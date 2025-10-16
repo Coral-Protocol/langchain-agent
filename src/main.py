@@ -156,6 +156,8 @@ async def main():
                 }
             )
 
+            logger.info("-> '%s'", step_result.content)
+
             history.add_message(step_result)
 
             if type(step_result) is AIMessage:
