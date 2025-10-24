@@ -90,9 +90,9 @@ async def main():
     MODEL_BASE_URL = getenv("MODEL_BASE_URL")
 
     TEMPERATURE = float(asserted_env("MODEL_TEMPERATURE"))
-    MAX_TOKENS = int(asserted_env("MODEL_MAX_TOKENS"))
+    MAX_TOKENS = int(float(asserted_env("MODEL_MAX_TOKENS")))
 
-    MAX_ITERATIONS = int(asserted_env("MAX_ITERATIONS"))
+    MAX_ITERATIONS = int(float(asserted_env("MAX_ITERATIONS")))
 
     global claim_handler  # This is global so tools can use it easily
     claim_handler = ClaimHandler("micro_coral")
